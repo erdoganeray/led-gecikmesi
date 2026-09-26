@@ -1,0 +1,1225 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LED Ölçüm Analizi</title>
+<style>
+  :root {
+    --bg: #101417;
+    --bg-2: #171d22;
+    --bg-3: #1e262c;
+    --line: #2c3840;
+    --line-2: #3a4852;
+    --text: #e7eee9;
+    --muted: #8b9aa3;
+    --faint: #5d6d76;
+    --green: #3ddea0;
+    --green-dim: rgba(61, 222, 160, 0.14);
+    --amber: #f0b429;
+    --amber-dim: rgba(240, 180, 41, 0.16);
+    --red: #ff6b6b;
+    --red-dim: rgba(255, 107, 107, 0.14);
+    --blue: #79b8ff;
+    --orange: #ff8a4c;
+    --white: #f4f7f8;
+    --shadow: 0 18px 50px rgba(0, 0, 0, 0.35);
+    --mono: "Cascadia Mono", Consolas, "Courier New", monospace;
+    --sans: "Segoe UI", system-ui, sans-serif;
+    --row-h: 32px;
+    --head-h: 36px;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font: 13px/1.4 var(--sans); }
+  button, input, select { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--green); outline-offset: 1px; }
+
+  #app { height: 100%; display: flex; flex-direction: column; min-width: 960px; }
+  header {
+    display: flex; align-items: center; gap: 16px;
+    padding: 10px 16px; border-bottom: 1px solid var(--line);
+    background: linear-gradient(180deg, #1a2228, #141a1e);
+    flex: 0 0 auto;
+  }
+  .mark {
+    width: 34px; height: 34px; border-radius: 8px;
+    display: grid; place-items: center;
+    background: var(--bg-3); border: 1px solid var(--line-2); flex: 0 0 auto;
+  }
+  .brand { min-width: 180px; }
+  .brand h1 { margin: 0; font-size: 15px; font-weight: 650; letter-spacing: 0.01em; }
+  .brand p { margin: 1px 0 0; color: var(--muted); font-size: 12px; }
+  .filebar { display: flex; gap: 8px; flex: 1; align-items: center; overflow: auto; min-height: 36px; }
+  .filechip {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--bg-3); border: 1px solid var(--line); border-radius: 999px;
+    padding: 4px 6px 4px 10px; white-space: nowrap; max-width: 340px;
+  }
+  .filechip.off { opacity: 0.45; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--faint); flex: 0 0 auto; }
+  .filechip .nm { overflow: hidden; text-overflow: ellipsis; max-width: 210px; }
+  .filechip .ct { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .iconbtn, .textbtn {
+    border: 1px solid var(--line); background: var(--bg-3); border-radius: 8px;
+    height: 28px; padding: 0 10px;
+  }
+  .iconbtn { width: 28px; padding: 0; color: var(--muted); }
+  .iconbtn:hover, .textbtn:hover { border-color: var(--line-2); color: var(--text); }
+  .textbtn.primary { background: var(--green); color: #062216; border-color: transparent; font-weight: 650; }
+  .textbtn.primary:hover { filter: brightness(1.05); }
+  .textbtn:disabled { opacity: 0.4; cursor: default; }
+  header .actions { display: flex; gap: 8px; flex: 0 0 auto; }
+
+  #workspace { flex: 1; display: flex; min-height: 0; }
+  #filters {
+    width: 332px; flex: 0 0 332px; border-right: 1px solid var(--line);
+    background: var(--bg-2); overflow: auto; padding: 12px;
+  }
+  #main { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--bg); }
+  .search {
+    width: 100%; background: var(--bg); border: 1px solid var(--line); border-radius: 8px;
+    padding: 8px 10px; margin-bottom: 10px;
+  }
+  .quick { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+  .qbtn {
+    border: 1px solid var(--line); background: transparent; color: var(--muted);
+    border-radius: 999px; padding: 4px 9px; font-size: 12px;
+  }
+  .qbtn:hover, .qbtn.on { color: var(--text); border-color: var(--line-2); background: var(--bg-3); }
+  details.grp { border-top: 1px solid var(--line); padding: 8px 0 2px; }
+  details.grp summary {
+    cursor: pointer; color: var(--muted); font-size: 11px; letter-spacing: 0.08em;
+    text-transform: uppercase; list-style: none; display: flex; justify-content: space-between;
+    user-select: none; margin-bottom: 8px;
+  }
+  details.grp summary::-webkit-details-marker { display: none; }
+  .field { margin-bottom: 10px; }
+  .field-h { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 4px; color: var(--muted); font-size: 12px; }
+  .field-h b { color: var(--text); font-weight: 600; }
+  .chips { display: flex; flex-wrap: wrap; gap: 5px; }
+  .chip {
+    border: 1px solid var(--line); background: transparent; color: var(--muted);
+    border-radius: 999px; padding: 3px 8px; font-size: 12px; display: inline-flex; gap: 6px; align-items: center;
+  }
+  .chip .n { color: var(--faint); font-variant-numeric: tabular-nums; }
+  .chip.on { color: var(--text); background: var(--bg-3); border-color: var(--line-2); }
+  .chip.on .n { color: var(--muted); }
+  .chip.dim { opacity: 0.38; }
+  .chip.c-GREEN.on { background: var(--green-dim); border-color: #2d9a6e; color: var(--green); }
+  .chip.c-AMBER.on { background: var(--amber-dim); border-color: #a8842a; color: var(--amber); }
+  .chip.c-WHITE.on { background: rgba(244,247,248,0.08); border-color: #8d9aa1; color: var(--white); }
+  .chip.c-True.on, .chip.pass-true.on { background: var(--green-dim); border-color: #2d9a6e; color: var(--green); }
+  .chip.c-False.on, .chip.pass-false.on { background: var(--red-dim); border-color: #a84d4d; color: var(--red); }
+  .optlist { display: flex; flex-direction: column; gap: 2px; max-height: 180px; overflow: auto; }
+  .opt {
+    display: flex; align-items: center; gap: 8px; padding: 3px 4px; border-radius: 6px; color: var(--muted);
+  }
+  .opt:hover { background: var(--bg-3); }
+  .opt.on { color: var(--text); }
+  .opt.dim { opacity: 0.4; }
+  .opt .nm { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .opt .n { font-variant-numeric: tabular-nums; color: var(--faint); }
+  .range { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .range input, .datebox input, .contains input {
+    width: 100%; background: var(--bg); border: 1px solid var(--line); border-radius: 7px; padding: 6px 8px;
+  }
+  .range input.bad { border-color: var(--red); }
+  .hint { color: var(--faint); font-size: 11px; font-variant-numeric: tabular-nums; }
+  .datebox, .contains { display: grid; gap: 6px; }
+
+  #stats {
+    display: grid; grid-template-columns: 280px 1fr 320px; gap: 12px;
+    padding: 10px 12px; border-bottom: 1px solid var(--line); background: #141a1e;
+  }
+  .stat b { display: block; font-size: 20px; font-variant-numeric: tabular-nums; font-weight: 650; }
+  .stat span, .muted { color: var(--muted); }
+  .passline { display: flex; height: 8px; border-radius: 99px; overflow: hidden; background: var(--bg-3); margin-top: 8px; }
+  .passline i { display: block; height: 100%; }
+  .reasons { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .tag { font-size: 11px; border-radius: 999px; padding: 2px 7px; background: var(--bg-3); color: var(--muted); }
+  .tag.ON { color: var(--amber); }
+  .tag.FLAS { color: var(--orange); }
+  .tag.AKIM { color: var(--blue); }
+  .hist-head { display: flex; justify-content: space-between; gap: 8px; align-items: center; margin-bottom: 6px; }
+  .hist-head select, .toolbar select {
+    background: var(--bg); border: 1px solid var(--line); border-radius: 7px; padding: 4px 6px;
+  }
+  .nums { display: flex; gap: 10px; color: var(--muted); font-variant-numeric: tabular-nums; font-size: 12px; }
+  .nums b { color: var(--text); font-weight: 600; }
+  .hist { display: flex; align-items: flex-end; gap: 2px; height: 54px; }
+  .hist button {
+    flex: 1; padding: 0; border: 0; background: #2f6f57; border-radius: 2px 2px 0 0; min-width: 0; height: 100%;
+    position: relative;
+  }
+  .hist button > span { display: block; width: 100%; background: var(--green); border-radius: 2px 2px 0 0; position: absolute; bottom: 0; left: 0; }
+  .hist button.on { outline: 1px solid var(--amber); }
+  .hist button:hover > span { filter: brightness(1.15); }
+
+  .toolbar {
+    display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--line);
+  }
+  .toolbar .grow { flex: 1; color: var(--muted); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .pop { position: relative; }
+  .popbox {
+    position: absolute; right: 0; top: 34px; z-index: 5; width: 260px; max-height: 360px; overflow: auto;
+    background: var(--bg-2); border: 1px solid var(--line-2); border-radius: 10px; box-shadow: var(--shadow); padding: 8px;
+  }
+  .popbox label { display: flex; gap: 8px; align-items: center; padding: 4px; border-radius: 6px; }
+  .popbox label:hover { background: var(--bg-3); }
+  .hidden { display: none !important; }
+
+  #tableWrap { flex: 1; min-height: 0; display: flex; flex-direction: column; position: relative; }
+  #headScroll { overflow: hidden; flex: 0 0 auto; background: #1a2228; border-bottom: 1px solid var(--line); }
+  #bodyScroll { flex: 1; overflow: auto; position: relative; }
+  table { border-collapse: separate; border-spacing: 0; table-layout: fixed; }
+  th, td {
+    height: var(--row-h); padding: 0 8px; text-align: left; white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis; border-right: 1px solid rgba(44, 56, 64, 0.65);
+    font-variant-numeric: tabular-nums;
+  }
+  th {
+    height: var(--head-h); font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase;
+    color: var(--muted); font-weight: 650; background: #1a2228; position: relative;
+  }
+  th button.sort {
+    all: unset; cursor: pointer; display: flex; width: 100%; height: 100%; align-items: center; gap: 4px;
+  }
+  th button.sort:hover { color: var(--text); }
+  th .arr { color: var(--green); }
+  td { font-family: var(--mono); font-size: 12px; }
+  tr.data { cursor: pointer; }
+  tr.data:hover td { background: rgba(61, 222, 160, 0.06); }
+  tr.fail td:first-child { box-shadow: inset 3px 0 0 var(--red); }
+  tr.ok td:first-child { box-shadow: inset 3px 0 0 var(--green); }
+  tr.dim td { color: #7e8d96; }
+  td.pass-True { color: var(--green); }
+  td.pass-False { color: var(--red); }
+  td.fail-ON { color: var(--amber); }
+  td.fail-FLAS { color: var(--orange); }
+  td.fail-AKIM { color: var(--blue); }
+  #spacer { position: relative; }
+  #body { position: absolute; top: 0; left: 0; }
+  #emptyTable {
+    position: absolute; inset: 48px 0 0 0; display: grid; place-items: center; color: var(--muted); pointer-events: none;
+  }
+
+  #drop {
+    flex: 1; display: grid; place-items: center; padding: 32px;
+  }
+  .dropcard {
+    width: min(640px, 100%); border: 1.5px dashed var(--line-2); border-radius: 16px;
+    background: var(--bg-2); padding: 42px 32px; text-align: center;
+  }
+  .dropcard h2 { margin: 0 0 8px; font-size: 22px; font-weight: 650; }
+  .dropcard p { margin: 0 auto 18px; max-width: 460px; color: var(--muted); }
+  .dropcard.hot { border-color: var(--green); background: var(--green-dim); }
+  #workspace.hot { outline: 2px dashed var(--green); outline-offset: -6px; }
+
+  #drawer {
+    position: fixed; top: 0; right: 0; height: 100%; width: min(420px, 92vw); background: #151b1f;
+    border-left: 1px solid var(--line-2); box-shadow: var(--shadow); z-index: 20;
+    display: flex; flex-direction: column;
+  }
+  #drawer header { justify-content: space-between; }
+  #drawer .body { overflow: auto; padding: 8px 16px 24px; }
+  .kv { display: grid; grid-template-columns: 132px 1fr; gap: 6px 10px; padding: 7px 0; border-bottom: 1px solid var(--line); }
+  .kv .k { color: var(--muted); }
+  .kv .v { font-family: var(--mono); word-break: break-all; }
+  #backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.35); z-index: 19; }
+  .note {
+    margin: 0 0 10px; padding: 8px 10px; border-radius: 8px; background: var(--amber-dim);
+    color: #f3d48a; font-size: 12px;
+  }
+  .break { margin-top: 8px; }
+  .break table { width: 100%; }
+  .break th, .break td { height: 26px; font-size: 12px; border: 0; }
+  .break tr { cursor: pointer; }
+  .break tr:hover td { background: var(--bg-3); }
+  .bar { height: 6px; border-radius: 99px; background: var(--bg); overflow: hidden; }
+  .bar i { display: block; height: 100%; background: var(--green); }
+  kbd { font-family: var(--mono); font-size: 11px; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; padding: 0 4px; color: var(--muted); }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="mark" aria-hidden="true">
+      <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+        <rect x="4" y="2" width="10" height="8" rx="2" stroke="#3ddea0" stroke-width="1.6"/>
+        <path d="M6 10v2.5a3 3 0 0 0 6 0V10" stroke="#8b9aa3" stroke-width="1.4"/>
+        <path d="M2 5h2M14 5h2M3 8h1.5M13.5 8H15" stroke="#f0b429" stroke-width="1.4" stroke-linecap="round"/>
+      </svg>
+    </div>
+    <div class="brand">
+      <h1>LED Ölçüm Analizi</h1>
+      <p>Veriler tarayıcıda kalır, dışarı gönderilmez</p>
+    </div>
+    <div class="filebar" id="filebar"></div>
+    <div class="actions">
+      <button class="textbtn" id="exportBtn" type="button" disabled>Filtrelenmiş CSV</button>
+      <button class="textbtn primary" id="addBtn" type="button">CSV ekle</button>
+      <input id="file" type="file" accept=".csv,text/csv,text/plain" multiple hidden>
+    </div>
+  </header>
+
+  <section id="drop">
+    <div class="dropcard" id="dropcard">
+      <h2>CSV dosyalarını buraya bırak</h2>
+      <p>Birden fazla ölçüm dosyasını aynı anda ekleyebilirsin. Kayıtlar tek tabloda birleşir; renk, faz, gerilim, kick ve ölçüm aralıklarından süzülür.</p>
+      <button class="textbtn primary" id="addBtn2" type="button">Dosya seç</button>
+      <p style="margin-top:18px">Bu klasördeki <b style="color:var(--text)">v4_green</b>, <b style="color:var(--text)">v4_amber</b> ve <b style="color:var(--text)">v4_white</b> dosyaları doğrudan sürüklenebilir.</p>
+    </div>
+  </section>
+
+  <div id="workspace" class="hidden">
+    <aside id="filters"></aside>
+    <div id="main">
+      <section id="stats"></section>
+      <div class="toolbar">
+        <div class="grow" id="activeFilters">Filtre yok</div>
+        <button class="textbtn" id="densityBtn" type="button">Sıkı</button>
+        <div class="pop">
+          <button class="textbtn" id="colBtn" type="button">Sütunlar</button>
+          <div class="popbox hidden" id="colBox"></div>
+        </div>
+        <button class="textbtn" id="clearBtn" type="button">Filtreleri temizle</button>
+      </div>
+      <div id="tableWrap">
+        <div id="headScroll"></div>
+        <div id="bodyScroll">
+          <div id="spacer"><table id="body"></table></div>
+        </div>
+        <div id="emptyTable" class="hidden">Bu filtreye uyan satır yok</div>
+      </div>
+    </div>
+  </div>
+</div>
+<div id="backdrop" class="hidden"></div>
+<aside id="drawer" class="hidden" aria-label="Satır detayı"></aside>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const GROUPS = [
+  ["Zaman", ["ts"]],
+  ["Kimlik", ["_dosya", "board_id", "color", "run_id"]],
+  ["Sürüş", ["volt_set", "volt_meas", "intensity", "kick_pc", "kick_ms", "phase"]],
+  ["Zamanlama", ["t_on_ms", "t_rising_ms", "t_dead_ms", "on_ms", "en2_ms"]],
+  ["Ölçüm", ["flash", "peak_mA", "settled_mA", "ldr_settled_V"]],
+  ["Karar", ["measured", "valid", "pass", "fail_reason", "skip_reason", "error", "on_min", "flash_max", "current_min"]]
+];
+
+const state = {
+  datasets: [],
+  columns: [],
+  meta: {},
+  rows: [],
+  filtered: [],
+  filesOn: new Set(),
+  q: "",
+  cat: {},
+  num: {},
+  date: {},
+  text: {},
+  hideUnmeasured: false,
+  sort: { col: "ts", dir: 1 },
+  hidden: new Set(),
+  focus: "on_ms",
+  groupBy: "phase",
+  dense: false,
+  colBoxOpen: false,
+  openRow: null
+};
+
+function esc(s) {
+  return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+function isNum(v) {
+  if (v == null || v === "") return false;
+  return Number.isFinite(Number(v));
+}
+function parseTs(v) {
+  if (!v) return null;
+  const t = Date.parse(String(v).trim().replace(" ", "T"));
+  return Number.isNaN(t) ? null : t;
+}
+function userNum(s) {
+  const t = String(s ?? "").trim().replace(",", ".");
+  if (!t) return { ok: true, n: null };
+  const n = Number(t);
+  return Number.isFinite(n) ? { ok: true, n } : { ok: false, n: null };
+}
+function fmt(n, d) {
+  if (n == null || Number.isNaN(n)) return "—";
+  const digits = d != null ? d : (Math.abs(n) >= 100 ? 1 : Math.abs(n) >= 10 ? 2 : 3);
+  return n.toLocaleString("tr-TR", { maximumFractionDigits: digits });
+}
+function fileHue(name) {
+  const n = name.toLowerCase();
+  if (n.includes("green")) return "#3ddea0";
+  if (n.includes("amber")) return "#f0b429";
+  if (n.includes("white")) return "#f4f7f8";
+  return "#79b8ff";
+}
+function chipClass(col, val) {
+  if (col === "color") return "c-" + val;
+  if (col === "pass" || col === "valid" || col === "measured") return "c-" + val;
+  if (col === "fail_reason" && val) return "pass-false";
+  return "";
+}
+function labelVal(v) { return v === "" ? "(boş)" : v; }
+
+function parseCSV(text) {
+  if (text.charCodeAt(0) === 0xfeff) text = text.slice(1);
+  const rows = [];
+  let row = [], cur = "", q = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (q) {
+      if (c === '"') {
+        if (text[i + 1] === '"') { cur += '"'; i++; }
+        else q = false;
+      } else cur += c;
+    } else if (c === '"') q = true;
+    else if (c === ",") { row.push(cur); cur = ""; }
+    else if (c === "\n") { row.push(cur); rows.push(row); row = []; cur = ""; }
+    else if (c !== "\r") cur += c;
+  }
+  if (cur.length || row.length) { row.push(cur); rows.push(row); }
+  return rows.filter((r) => r.some((c) => c !== ""));
+}
+
+function addFiles(fileList) {
+  const files = [...fileList];
+  if (!files.length) return;
+  Promise.all(files.map((f) => f.text().then((text) => ({ name: f.name, text })))).then((loaded) => {
+    for (const item of loaded) ingest(item.name, item.text);
+    rebuild();
+  });
+}
+function ingest(name, text) {
+  const table = parseCSV(text);
+  if (table.length < 2) return;
+  const header = table[0].map((h) => h.trim());
+  const raw = table.slice(1);
+  const idx = state.datasets.findIndex((d) => d.name === name);
+  const rec = { name, header, raw };
+  if (idx >= 0) state.datasets[idx] = rec;
+  else state.datasets.push(rec);
+  state.filesOn.add(name);
+}
+
+function rebuild() {
+  const union = [];
+  const seen = new Set();
+  for (const ds of state.datasets) {
+    for (const h of ds.header) if (h && !seen.has(h)) { seen.add(h); union.push(h); }
+  }
+  const columns = ["_dosya", ...union];
+  const rows = [];
+  for (const ds of state.datasets) {
+    const index = Object.fromEntries(ds.header.map((h, i) => [h, i]));
+    for (const raw of ds.raw) {
+      const cells = columns.map((col) => col === "_dosya" ? ds.name : (index[col] == null ? "" : (raw[index[col]] ?? "").trim()));
+      rows.push({ file: ds.name, cells, blob: cells.join("\t").toLowerCase() });
+    }
+  }
+  const meta = {};
+  columns.forEach((col, ci) => {
+    const uniq = new Set();
+    let nonEmpty = 0, numeric = 0, dates = 0, overflow = false;
+    let min = Infinity, max = -Infinity;
+    for (const row of rows) {
+      const v = row.cells[ci];
+      if (v === "") continue;
+      nonEmpty++;
+      if (uniq.size < 48) uniq.add(v); else overflow = true;
+      if (isNum(v)) {
+        numeric++;
+        const n = Number(v);
+        if (n < min) min = n;
+        if (n > max) max = n;
+      }
+      if (/^\d{4}-\d{2}-\d{2}/.test(v)) dates++;
+    }
+    let type = "text";
+    if (nonEmpty && dates / nonEmpty > 0.8) type = "date";
+    else if (!overflow && uniq.size <= 18) type = "cat";
+    else if (nonEmpty && numeric / nonEmpty > 0.9) type = "num";
+    else if (!overflow && uniq.size <= 28) type = "cat";
+    const values = type === "cat" ? catValues(rows, ci) : [];
+    const sortAs = type === "date" ? "date" : (nonEmpty && numeric / nonEmpty > 0.9 ? "num" : "str");
+    meta[col] = {
+      type, values, sortAs, nonEmpty,
+      min: min === Infinity ? null : min,
+      max: max === -Infinity ? null : max,
+      empty: rows.length - nonEmpty,
+      unique: overflow ? 49 : uniq.size
+    };
+  });
+  state.columns = columns;
+  state.meta = meta;
+  state.rows = rows;
+  if (!columns.includes(state.sort.col)) state.sort = { col: columns[1] || columns[0], dir: 1 };
+  if (!meta[state.focus] || meta[state.focus].type !== "num") {
+    state.focus = columns.find((c) => meta[c].type === "num") || columns[0];
+  }
+  if (!meta[state.groupBy] || meta[state.groupBy].type !== "cat") {
+    state.groupBy = ["phase", "intensity", "kick_pc", "color", "fail_reason"].find((c) => meta[c] && meta[c].type === "cat") || columns.find((c) => meta[c].type === "cat");
+  }
+  for (const col of Object.keys(state.cat)) if (!meta[col]) delete state.cat[col];
+  $("drop").classList.toggle("hidden", rows.length > 0);
+  $("workspace").classList.toggle("hidden", rows.length === 0);
+  renderFiles();
+  renderSidebar();
+  renderColBox();
+  apply();
+}
+
+function catValues(rows, ci) {
+  const set = new Set();
+  let empty = false;
+  for (const row of rows) {
+    const v = row.cells[ci];
+    if (v === "") empty = true;
+    else set.add(v);
+  }
+  const vals = [...set].sort((a, b) => {
+    const rank = (v) => v === "True" ? 0 : v === "False" ? 1 : 2;
+    const d = rank(a) - rank(b);
+    if (d) return d;
+    if (isNum(a) && isNum(b)) return Number(a) - Number(b);
+    return a.localeCompare(b, "tr");
+  });
+  if (empty) vals.push("");
+  return vals;
+}
+
+function colIndex(name) { return state.columns.indexOf(name); }
+
+function selectedCats(col) {
+  const all = state.meta[col].values;
+  const set = state.cat[col];
+  if (!set) return null;
+  if (set.size === 0 || set.size === all.length) return null;
+  return set;
+}
+
+function matchRow(row, skipCol) {
+  if (!state.filesOn.has(row.file)) return false;
+  if (state.q && !row.blob.includes(state.q)) return false;
+  if (state.hideUnmeasured) {
+    const mi = colIndex("measured");
+    if (mi >= 0 && row.cells[mi] !== "True") return false;
+  }
+  for (const col of state.columns) {
+    if (col === skipCol) continue;
+    const meta = state.meta[col];
+    const v = row.cells[colIndex(col)];
+    if (meta.type === "cat") {
+      const sel = selectedCats(col);
+      if (sel && !sel.has(v)) return false;
+    } else if (meta.type === "num") {
+      const f = state.num[col];
+      if (!f) continue;
+      const min = userNum(f.min), max = userNum(f.max);
+      if ((min.n != null || max.n != null) && v === "") return false;
+      if (v !== "" && isNum(v)) {
+        const n = Number(v);
+        if (min.n != null && n < min.n) return false;
+        if (max.n != null && n > max.n) return false;
+      } else if (min.n != null || max.n != null) return false;
+    } else if (meta.type === "date") {
+      const f = state.date[col];
+      if (!f || (!f.from && !f.to)) continue;
+      const t = parseTs(v);
+      if (t == null) return false;
+      if (f.from && t < parseTs(f.from)) return false;
+      if (f.to && t > parseTs(f.to)) return false;
+    } else if (meta.type === "text") {
+      const q = (state.text[col] || "").trim().toLowerCase();
+      if (q && !v.toLowerCase().includes(q)) return false;
+    }
+  }
+  return true;
+}
+
+function apply() {
+  const out = [];
+  for (let i = 0; i < state.rows.length; i++) if (matchRow(state.rows[i])) out.push(i);
+  const ci = colIndex(state.sort.col);
+  const meta = state.meta[state.sort.col];
+  const dir = state.sort.dir;
+  out.sort((ia, ib) => {
+    const a = state.rows[ia].cells[ci];
+    const b = state.rows[ib].cells[ci];
+    if (a === "" && b === "") return ia - ib;
+    if (a === "") return 1;
+    if (b === "") return -1;
+    let c = 0;
+    if (meta && meta.sortAs === "num") c = Number(a) - Number(b);
+    else if (meta && meta.sortAs === "date") c = parseTs(a) - parseTs(b);
+    else c = a.localeCompare(b, "tr", { numeric: true });
+    return c * dir || ia - ib;
+  });
+  state.filtered = out;
+  renderStats();
+  updateFacetCounts();
+  renderTable();
+  $("exportBtn").disabled = out.length === 0;
+}
+
+function baseMatch(row) {
+  if (!state.filesOn.has(row.file)) return false;
+  if (state.q && !row.blob.includes(state.q)) return false;
+  if (state.hideUnmeasured) {
+    const mi = colIndex("measured");
+    if (mi >= 0 && row.cells[mi] !== "True") return false;
+  }
+  for (const col of state.columns) {
+    const meta = state.meta[col];
+    if (meta.type === "cat") continue;
+    const v = row.cells[colIndex(col)];
+    if (meta.type === "num") {
+      const f = state.num[col];
+      if (!f) continue;
+      const min = userNum(f.min), max = userNum(f.max);
+      if ((min.n != null || max.n != null) && (v === "" || !isNum(v))) return false;
+      if (v !== "" && isNum(v)) {
+        const n = Number(v);
+        if (min.n != null && n < min.n) return false;
+        if (max.n != null && n > max.n) return false;
+      }
+    } else if (meta.type === "date") {
+      const f = state.date[col];
+      if (!f || (!f.from && !f.to)) continue;
+      const t = parseTs(v);
+      if (t == null) return false;
+      if (f.from && t < parseTs(f.from)) return false;
+      if (f.to && t > parseTs(f.to)) return false;
+    } else if (meta.type === "text") {
+      const q = (state.text[col] || "").trim().toLowerCase();
+      if (q && !v.toLowerCase().includes(q)) return false;
+    }
+  }
+  return true;
+}
+
+function updateFacetCounts() {
+  const catCols = state.columns.filter((c) => state.meta[c].type === "cat");
+  const counts = {};
+  for (const col of catCols) counts[col] = Object.fromEntries(state.meta[col].values.map((v) => [v, 0]));
+  for (const row of state.rows) {
+    if (!baseMatch(row)) continue;
+    for (const col of catCols) {
+      const sel = selectedCats(col);
+      let ok = true;
+      for (const other of catCols) {
+        if (other === col) continue;
+        const s = selectedCats(other);
+        if (s && !s.has(row.cells[colIndex(other)])) { ok = false; break; }
+      }
+      if (!ok) continue;
+      const v = row.cells[colIndex(col)];
+      if (counts[col][v] != null) counts[col][v]++;
+    }
+  }
+  document.querySelectorAll("[data-count]").forEach((el) => {
+    const [col, enc] = el.dataset.count.split("|");
+    const val = decodeURIComponent(enc);
+    const n = counts[col] ? counts[col][val] || 0 : 0;
+    el.textContent = n.toLocaleString("tr-TR");
+    const host = el.closest(".chip, .opt");
+    if (host) host.classList.toggle("dim", n === 0);
+  });
+}
+
+function renderFiles() {
+  const bar = $("filebar");
+  if (!state.datasets.length) { bar.innerHTML = ""; return; }
+  bar.innerHTML = state.datasets.map((ds) => {
+    const on = state.filesOn.has(ds.name);
+    return `<div class="filechip ${on ? "" : "off"}">
+      <i class="dot" style="background:${fileHue(ds.name)}"></i>
+      <span class="nm" title="${esc(ds.name)}">${esc(ds.name)}</span>
+      <span class="ct">${ds.raw.length.toLocaleString("tr-TR")}</span>
+      <button class="iconbtn" type="button" data-file-toggle="${esc(ds.name)}" title="${on ? "Tablodan çıkar" : "Tabloya al"}">${on ? "●" : "○"}</button>
+      <button class="iconbtn" type="button" data-file-remove="${esc(ds.name)}" title="Dosyayı kaldır">×</button>
+    </div>`;
+  }).join("");
+}
+
+function isConst(col) {
+  const m = state.meta[col];
+  if (!m) return false;
+  if (m.type === "cat") return m.values.filter((v) => v !== "").length <= 1;
+  if (m.type === "num") return m.min != null && m.min === m.max;
+  return false;
+}
+
+function fieldHTML(col) {
+  const m = state.meta[col];
+  if (!m) return "";
+  if (m.type === "cat") {
+    const sel = state.cat[col];
+    const chips = m.values.length <= 10;
+    const opts = m.values.map((v) => {
+      const on = !sel || sel.has(v);
+      const cls = chipClass(col, v);
+      const enc = encodeURIComponent(v);
+      if (chips) {
+        return `<button type="button" class="chip ${cls} ${on ? "on" : ""}" data-cat="${esc(col)}" data-val="${esc(v)}">${esc(labelVal(v))}<span class="n" data-count="${esc(col)}|${enc}">0</span></button>`;
+      }
+      return `<label class="opt ${on ? "on" : ""}">
+        <input type="checkbox" data-cat="${esc(col)}" data-val="${esc(v)}" ${on ? "checked" : ""}>
+        <span class="nm">${esc(labelVal(v))}</span>
+        <span class="n" data-count="${esc(col)}|${enc}">0</span>
+      </label>`;
+    }).join("");
+    return `<div class="field" data-field="${esc(col)}">
+      <div class="field-h"><b>${esc(col)}</b><span class="hint">${m.unique > 48 ? "48+" : m.values.filter(v=>v!=="").length} değer</span></div>
+      <div class="${chips ? "chips" : "optlist"}">${opts}</div>
+    </div>`;
+  }
+  if (m.type === "num") {
+    const f = state.num[col] || { min: "", max: "" };
+    return `<div class="field" data-field="${esc(col)}">
+      <div class="field-h"><b>${esc(col)}</b><span class="hint">${fmt(m.min)} – ${fmt(m.max)}</span></div>
+      <div class="range">
+        <input data-min="${esc(col)}" placeholder="min ${fmt(m.min)}" value="${esc(f.min)}" inputmode="decimal">
+        <input data-max="${esc(col)}" placeholder="max ${fmt(m.max)}" value="${esc(f.max)}" inputmode="decimal">
+      </div>
+    </div>`;
+  }
+  if (m.type === "date") {
+    const f = state.date[col] || { from: "", to: "" };
+    return `<div class="field">
+      <div class="field-h"><b>${esc(col)}</b><span class="hint">${m.nonEmpty.toLocaleString("tr-TR")} kayıt</span></div>
+      <div class="datebox">
+        <input type="datetime-local" step="1" data-from="${esc(col)}" value="${esc(f.from)}">
+        <input type="datetime-local" step="1" data-to="${esc(col)}" value="${esc(f.to)}">
+      </div>
+    </div>`;
+  }
+  const q = state.text[col] || "";
+  return `<div class="field">
+    <div class="field-h"><b>${esc(col)}</b><span class="hint">metin içerir</span></div>
+    <div class="contains"><input data-text="${esc(col)}" placeholder="içerir…" value="${esc(q)}"></div>
+  </div>`;
+}
+
+function renderSidebar() {
+  const present = new Set(state.columns);
+  const used = new Set();
+  const mismatch = [];
+  const union = state.columns.filter((c) => c !== "_dosya");
+  for (const col of union) {
+    const absent = state.datasets.filter((d) => !d.header.includes(col));
+    if (absent.length && absent.length < state.datasets.length) mismatch.push(`${col}: ${absent.map((d) => d.name).join(", ")}`);
+  }
+  let html = `<input class="search" id="q" placeholder="Tüm sütunlarda ara  /" value="${esc(state.q)}">
+    <div class="quick">
+      <button type="button" class="qbtn ${state.hideUnmeasured ? "on" : ""}" id="unmeasured">Yalnızca measured</button>
+      <button type="button" class="qbtn" data-quick="pass">Yalnızca geçen</button>
+      <button type="button" class="qbtn" data-quick="fail">Yalnızca kalan</button>
+      <button type="button" class="qbtn" data-quick="nobitti">bitti hariç</button>
+    </div>`;
+  if (mismatch.length) html += `<div class="note">Bazı dosyalarda eksik sütun var. Boş hücreler o dosyadan geliyor.<br>${mismatch.map(esc).join("<br>")}</div>`;
+  const consts = [];
+  const pushGroup = (title, names) => {
+    const varying = [];
+    for (const name of names) {
+      if (!present.has(name)) continue;
+      used.add(name);
+      if (isConst(name)) consts.push(name);
+      else varying.push(name);
+    }
+    if (!varying.length) return "";
+    return `<details class="grp" open><summary>${esc(title)}<span>${varying.length}</span></summary>${varying.map(fieldHTML).join("")}</details>`;
+  };
+  for (const [title, names] of GROUPS) html += pushGroup(title, names);
+  const rest = state.columns.filter((c) => !used.has(c) && !isConst(c));
+  state.columns.filter((c) => !used.has(c) && isConst(c)).forEach((c) => consts.push(c));
+  if (rest.length) html += `<details class="grp" open><summary>Diğer<span>${rest.length}</span></summary>${rest.map(fieldHTML).join("")}</details>`;
+  if (consts.length) html += `<details class="grp"><summary>Sabit alanlar<span>${consts.length}</span></summary>${consts.map(fieldHTML).join("")}</details>`;
+  $("filters").innerHTML = html;
+}
+
+function visibleCols() {
+  return state.columns.filter((c) => !state.hidden.has(c));
+}
+function colWidth(name) {
+  if (name === "ts") return 168;
+  if (name === "_dosya" || name === "run_id" || name === "skip_reason") return 250;
+  if (name.length > 12) return 118;
+  return 96;
+}
+function rowH() { return state.dense ? 26 : 32; }
+
+function renderColBox() {
+  $("colBox").innerHTML = state.columns.map((c) => {
+    const on = !state.hidden.has(c);
+    return `<label><input type="checkbox" data-col-vis="${esc(c)}" ${on ? "checked" : ""}><span>${esc(c)}</span></label>`;
+  }).join("");
+}
+
+function renderStats() {
+  const rows = state.filtered.map((i) => state.rows[i]);
+  const n = rows.length;
+  const total = state.rows.filter((r) => state.filesOn.has(r.file)).length;
+  const pi = colIndex("pass");
+  const fi = colIndex("fail_reason");
+  let pass = 0, fail = 0, judged = 0;
+  const reasons = {};
+  if (pi >= 0) {
+    for (const row of rows) {
+      const p = row.cells[pi];
+      if (p === "True") { pass++; judged++; }
+      else if (p === "False") {
+        fail++; judged++;
+        if (fi >= 0) {
+          const fr = row.cells[fi] || "(boş)";
+          reasons[fr] = (reasons[fr] || 0) + 1;
+        }
+      }
+    }
+  }
+  const rate = judged ? pass / judged : 0;
+  const reasonTags = Object.entries(reasons).sort((a, b) => b[1] - a[1]).map(([k, v]) =>
+    `<span class="tag ${esc(k)}">${esc(k)} ${v.toLocaleString("tr-TR")}</span>`).join("");
+  const numCols = state.columns.filter((c) => state.meta[c].type === "num");
+  const focus = numCols.includes(state.focus) ? state.focus : numCols[0];
+  state.focus = focus;
+  const vals = [];
+  if (focus) {
+    const ci = colIndex(focus);
+    for (const row of rows) {
+      const v = row.cells[ci];
+      if (v !== "" && isNum(v)) vals.push(Number(v));
+    }
+  }
+  vals.sort((a, b) => a - b);
+  const sum = vals.reduce((a, b) => a + b, 0);
+  const med = vals.length ? (vals.length % 2 ? vals[(vals.length - 1) / 2] : (vals[vals.length / 2 - 1] + vals[vals.length / 2]) / 2) : null;
+  const avg = vals.length ? sum / vals.length : null;
+  const hist = histogram(vals, 28);
+  const f = focus ? (state.num[focus] || { min: "", max: "" }) : null;
+  const histHtml = hist.map((b) => {
+    const h = b.n ? Math.max(8, Math.round(100 * b.n / b.peak)) : 0;
+    const active = f && userNum(f.min).n === b.min && userNum(f.max).n === b.max;
+    return `<button type="button" class="${active ? "on" : ""}" data-bin-min="${b.min}" data-bin-max="${b.max}" title="${fmt(b.min, 4)} – ${fmt(b.max, 4)} · ${b.n}"><span style="height:${h}%"></span></button>`;
+  }).join("");
+  const catCols = state.columns.filter((c) => state.meta[c].type === "cat" && c !== "_dosya");
+  const group = catCols.includes(state.groupBy) ? state.groupBy : catCols[0];
+  state.groupBy = group;
+  const breakdown = group ? breakdownHTML(rows, group) : "";
+  $("stats").innerHTML = `
+    <div class="stat">
+      <b>${n.toLocaleString("tr-TR")}</b>
+      <span>görünen / ${total.toLocaleString("tr-TR")} açık kayıt</span>
+      ${judged ? `<div class="passline"><i style="width:${(rate * 100).toFixed(2)}%;background:var(--green)"></i><i style="width:${((1 - rate) * 100).toFixed(2)}%;background:var(--red)"></i></div>
+      <div class="reasons"><span class="tag" style="color:var(--green)">pass ${pass.toLocaleString("tr-TR")} · %${(rate * 100).toFixed(1)}</span><span class="tag" style="color:var(--red)">fail ${fail.toLocaleString("tr-TR")}</span>${reasonTags}</div>` : ""}
+    </div>
+    <div>
+      <div class="hist-head">
+        <span class="muted">Dağılım</span>
+        <select id="focusSel">${numCols.map((c) => `<option ${c === focus ? "selected" : ""}>${esc(c)}</option>`).join("")}</select>
+      </div>
+      <div class="nums">${vals.length ? `<span>min <b>${fmt(vals[0])}</b></span><span>ortanca <b>${fmt(med)}</b></span><span>ortalama <b>${fmt(avg)}</b></span><span>max <b>${fmt(vals[vals.length - 1])}</b></span><span>n <b>${vals.length.toLocaleString("tr-TR")}</b></span>` : `<span>sayısal değer yok</span>`}</div>
+      <div class="hist" id="hist">${histHtml}</div>
+    </div>
+    <div>
+      <div class="hist-head">
+        <span class="muted">Kırılım</span>
+        <select id="groupSel">${catCols.map((c) => `<option ${c === group ? "selected" : ""}>${esc(c)}</option>`).join("")}</select>
+      </div>
+      <div class="break">${breakdown}</div>
+    </div>`;
+  renderActive();
+}
+
+function histogram(sorted, bins) {
+  if (!sorted.length) return [];
+  const lo = sorted[0];
+  const hi = sorted[sorted.length - 1];
+  if (lo === hi) return [{ min: lo, max: hi, n: sorted.length, peak: sorted.length }];
+  const width = (hi - lo) / bins;
+  const counts = Array.from({ length: bins }, () => 0);
+  for (const v of sorted) {
+    let i = Math.floor((v - lo) / width);
+    if (i < 0) i = 0;
+    if (i >= bins) i = bins - 1;
+    counts[i]++;
+  }
+  const peak = Math.max(...counts, 1);
+  return counts.map((n, i) => ({
+    min: lo + i * width,
+    max: i === bins - 1 ? hi : lo + (i + 1) * width,
+    n,
+    peak
+  }));
+}
+
+function breakdownHTML(rows, col) {
+  const ci = colIndex(col);
+  const pi = colIndex("pass");
+  const map = new Map();
+  for (const row of rows) {
+    const key = row.cells[ci];
+    let rec = map.get(key);
+    if (!rec) { rec = { n: 0, pass: 0, fail: 0 }; map.set(key, rec); }
+    rec.n++;
+    if (pi >= 0) {
+      if (row.cells[pi] === "True") rec.pass++;
+      else if (row.cells[pi] === "False") rec.fail++;
+    }
+  }
+  const items = [...map.entries()].sort((a, b) => b[1].n - a[1].n).slice(0, 8);
+  const peak = Math.max(...items.map(([, r]) => r.n), 1);
+  return `<table>${items.map(([k, r]) => {
+    const rate = (r.pass + r.fail) ? r.pass / (r.pass + r.fail) : 0;
+    return `<tr data-break="${esc(col)}" data-val="${esc(k)}">
+      <td title="${esc(labelVal(k))}">${esc(labelVal(k))}</td>
+      <td>${r.n.toLocaleString("tr-TR")}</td>
+      <td style="color:var(--green)">${pi >= 0 ? "%" + (rate * 100).toFixed(0) : ""}</td>
+      <td style="width:70px"><div class="bar"><i style="width:${(100 * r.n / peak).toFixed(1)}%"></i></div></td>
+    </tr>`;
+  }).join("")}</table>`;
+}
+
+function activeList() {
+  const parts = [];
+  if (state.q) parts.push(`arama: ${state.q}`);
+  if (state.hideUnmeasured) parts.push("measured = True");
+  const off = state.datasets.filter((d) => !state.filesOn.has(d.name)).map((d) => d.name);
+  if (off.length) parts.push("gizli dosya: " + off.join(", "));
+  for (const col of state.columns) {
+    const m = state.meta[col];
+    if (m.type === "cat") {
+      const sel = selectedCats(col);
+      if (sel) parts.push(`${col}: ${[...sel].map(labelVal).join(", ")}`);
+    } else if (m.type === "num" && state.num[col]) {
+      const { min, max } = state.num[col];
+      if (min || max) parts.push(`${col}: ${min || "…"} – ${max || "…"}`);
+    } else if (m.type === "date" && state.date[col] && (state.date[col].from || state.date[col].to)) {
+      parts.push(`${col}: ${state.date[col].from || "…"} → ${state.date[col].to || "…"}`);
+    } else if (m.type === "text" && state.text[col]) parts.push(`${col} ∋ ${state.text[col]}`);
+  }
+  return parts;
+}
+function renderActive() {
+  const parts = activeList();
+  $("activeFilters").textContent = parts.length ? parts.join("   ·   ") : "Filtre yok — tüm açık kayıtlar listeleniyor";
+}
+
+function renderTable() {
+  const cols = visibleCols();
+  const width = cols.reduce((s, c) => s + colWidth(c), 0);
+  const colgroup = `<colgroup>${cols.map((c) => `<col style="width:${colWidth(c)}px">`).join("")}</colgroup>`;
+  const head = `<table style="width:${width}px">${colgroup}<thead><tr>${cols.map((c) => {
+    const active = state.sort.col === c;
+    const arr = active ? (state.sort.dir > 0 ? "↑" : "↓") : "";
+    return `<th style="width:${colWidth(c)}px"><button class="sort" type="button" data-sort="${esc(c)}">${esc(c)}<span class="arr">${arr}</span></button></th>`;
+  }).join("")}</tr></thead></table>`;
+  $("headScroll").innerHTML = head;
+  $("body").style.width = width + "px";
+  $("body").innerHTML = colgroup + "<tbody></tbody>";
+  document.documentElement.style.setProperty("--row-h", rowH() + "px");
+  const total = state.filtered.length;
+  $("spacer").style.height = (total * rowH()) + "px";
+  $("emptyTable").classList.toggle("hidden", total !== 0);
+  const maxScroll = Math.max(0, total * rowH() - $("bodyScroll").clientHeight);
+  if ($("bodyScroll").scrollTop > maxScroll) $("bodyScroll").scrollTop = maxScroll;
+  renderVisible();
+  alignHeader();
+}
+
+function renderVisible() {
+  const cols = visibleCols();
+  const h = rowH();
+  const sc = $("bodyScroll");
+  const total = state.filtered.length;
+  const start = Math.max(0, Math.floor(sc.scrollTop / h) - 8);
+  const count = Math.ceil(sc.clientHeight / h) + 20;
+  const end = Math.min(total, start + count);
+  const idxs = state.indexes || null;
+  const body = [];
+  for (let i = start; i < end; i++) {
+    const row = state.rows[state.filtered[i]];
+    const pi = colIndex("pass");
+    const mi = colIndex("measured");
+    const pass = pi >= 0 ? row.cells[pi] : "";
+    const measured = mi >= 0 ? row.cells[mi] : "";
+    const cls = [pass === "True" ? "ok" : "", pass === "False" ? "fail" : "", measured === "False" ? "dim" : ""].filter(Boolean).join(" ");
+    const tds = cols.map((c) => {
+      const v = row.cells[colIndex(c)];
+      let extra = "";
+      if (c === "pass") extra = " pass-" + v;
+      if (c === "fail_reason" && v) extra = " fail-" + v;
+      return `<td class="${extra.trim()}" title="${esc(v)}">${esc(v)}</td>`;
+    }).join("");
+    body.push(`<tr class="data ${cls}" data-row="${state.filtered[i]}">${tds}</tr>`);
+  }
+  $("body").querySelector("tbody").innerHTML = body.join("");
+  $("body").style.transform = `translateY(${start * h}px)`;
+}
+
+function alignHeader() {
+  const sc = $("bodyScroll");
+  const sbw = sc.offsetWidth - sc.clientWidth;
+  $("headScroll").style.paddingRight = sbw + "px";
+  $("headScroll").scrollLeft = sc.scrollLeft;
+}
+
+function clearFilters() {
+  state.q = "";
+  state.cat = {};
+  state.num = {};
+  state.date = {};
+  state.text = {};
+  state.hideUnmeasured = false;
+  state.datasets.forEach((d) => state.filesOn.add(d.name));
+  renderFiles();
+  renderSidebar();
+  apply();
+}
+
+function toggleCat(col, val) {
+  const all = state.meta[col].values;
+  let set = state.cat[col];
+  if (!set) set = new Set(all);
+  if (set.has(val)) set.delete(val);
+  else set.add(val);
+  if (set.size === 0 || set.size === all.length) delete state.cat[col];
+  else state.cat[col] = set;
+  renderSidebar();
+  apply();
+}
+
+function quick(kind) {
+  if (kind === "pass" || kind === "fail") {
+    if (!state.meta.pass) return;
+    state.cat.pass = new Set([kind === "pass" ? "True" : "False"]);
+  }
+  if (kind === "nobitti") {
+    if (!state.meta.phase) return;
+    state.cat.phase = new Set(state.meta.phase.values.filter((v) => v !== "bitti"));
+  }
+  renderSidebar();
+  apply();
+}
+
+function openRow(index) {
+  const row = state.rows[index];
+  if (!row) return;
+  state.openRow = index;
+  const fields = state.columns.map((c) => `<div class="kv"><div class="k">${esc(c)}</div><div class="v">${row.cells[colIndex(c)] === "" ? "—" : esc(row.cells[colIndex(c)])}</div></div>`).join("");
+  $("drawer").innerHTML = `<header><div class="brand"><h1>Satır ${index + 1}</h1><p>${esc(row.file)}</p></div><button class="textbtn" id="closeDrawer" type="button">Kapat</button></header><div class="body">${fields}</div>`;
+  $("drawer").classList.remove("hidden");
+  $("backdrop").classList.remove("hidden");
+}
+function closeDrawer() {
+  state.openRow = null;
+  $("drawer").classList.add("hidden");
+  $("backdrop").classList.add("hidden");
+}
+
+function exportCSV() {
+  const cols = visibleCols();
+  const lines = [cols.join(",")];
+  for (const i of state.filtered) {
+    const row = state.rows[i];
+    lines.push(cols.map((c) => {
+      const v = row.cells[colIndex(c)];
+      return /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
+    }).join(","));
+  }
+  const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "led-filtre.csv";
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+function paintCatControl(col) {
+  const sel = state.cat[col];
+  document.querySelectorAll(`[data-cat="${CSS.escape(col)}"]`).forEach((el) => {
+    const val = el.dataset.val;
+    const on = !sel || sel.has(val);
+    if (el.tagName === "INPUT") el.checked = on;
+    const host = el.classList.contains("chip") ? el : el.closest(".opt");
+    if (host) host.classList.toggle("on", on);
+  });
+}
+
+$("addBtn").onclick = () => $("file").click();
+$("addBtn2").onclick = () => $("file").click();
+$("file").onchange = () => { addFiles($("file").files); $("file").value = ""; };
+$("exportBtn").onclick = exportCSV;
+$("clearBtn").onclick = clearFilters;
+$("densityBtn").onclick = () => {
+  state.dense = !state.dense;
+  $("densityBtn").textContent = state.dense ? "Rahat" : "Sıkı";
+  renderTable();
+};
+$("colBtn").onclick = (e) => {
+  e.stopPropagation();
+  state.colBoxOpen = !state.colBoxOpen;
+  $("colBox").classList.toggle("hidden", !state.colBoxOpen);
+};
+document.addEventListener("click", (e) => {
+  if (state.colBoxOpen && !e.target.closest(".pop")) {
+    state.colBoxOpen = false;
+    $("colBox").classList.add("hidden");
+  }
+});
+$("colBox").onclick = (e) => e.stopPropagation();
+$("colBox").addEventListener("change", (e) => {
+  const col = e.target.dataset.colVis;
+  if (!col) return;
+  if (e.target.checked) state.hidden.delete(col);
+  else state.hidden.add(col);
+  renderTable();
+});
+
+$("filebar").addEventListener("click", (e) => {
+  const t = e.target.closest("[data-file-toggle]");
+  const r = e.target.closest("[data-file-remove]");
+  if (t) {
+    const name = t.dataset.fileToggle;
+    if (state.filesOn.has(name)) state.filesOn.delete(name);
+    else state.filesOn.add(name);
+    renderFiles();
+    apply();
+  }
+  if (r) {
+    const name = r.dataset.fileRemove;
+    state.datasets = state.datasets.filter((d) => d.name !== name);
+    state.filesOn.delete(name);
+    if (!state.datasets.length) {
+      state.rows = [];
+      state.filtered = [];
+      $("drop").classList.remove("hidden");
+      $("workspace").classList.add("hidden");
+      $("filebar").innerHTML = "";
+      $("exportBtn").disabled = true;
+      return;
+    }
+    rebuild();
+  }
+});
+
+$("filters").addEventListener("input", (e) => {
+  const t = e.target;
+  if (t.id === "q") {
+    state.q = t.value.trim().toLowerCase();
+    apply();
+    return;
+  }
+  if (t.dataset.min || t.dataset.max) {
+    const col = t.dataset.min || t.dataset.max;
+    const box = state.num[col] || { min: "", max: "" };
+    if (t.dataset.min) box.min = t.value;
+    else box.max = t.value;
+    const parsed = userNum(t.value);
+    t.classList.toggle("bad", !parsed.ok);
+    if (!box.min && !box.max) delete state.num[col];
+    else state.num[col] = box;
+    apply();
+  }
+  if (t.dataset.from || t.dataset.to) {
+    const col = t.dataset.from || t.dataset.to;
+    const box = state.date[col] || { from: "", to: "" };
+    if (t.dataset.from) box.from = t.value;
+    else box.to = t.value;
+    if (!box.from && !box.to) delete state.date[col];
+    else state.date[col] = box;
+    apply();
+  }
+  if (t.dataset.text != null && t.dataset.cat == null) {
+    const col = t.dataset.text;
+    if (!t.value.trim()) delete state.text[col];
+    else state.text[col] = t.value;
+    apply();
+  }
+});
+$("filters").addEventListener("change", (e) => {
+  const t = e.target;
+  if (t.dataset.cat != null && t.type === "checkbox") toggleCat(t.dataset.cat, t.dataset.val);
+});
+$("filters").addEventListener("click", (e) => {
+  const chip = e.target.closest("button.chip[data-cat]");
+  if (chip) { toggleCat(chip.dataset.cat, chip.dataset.val); return; }
+  const q = e.target.closest("[data-quick]");
+  if (q) { quick(q.dataset.quick); return; }
+  if (e.target.id === "unmeasured") {
+    state.hideUnmeasured = !state.hideUnmeasured;
+    e.target.classList.toggle("on", state.hideUnmeasured);
+    apply();
+  }
+});
+
+$("stats").addEventListener("change", (e) => {
+  if (e.target.id === "focusSel") { state.focus = e.target.value; renderStats(); }
+  if (e.target.id === "groupSel") { state.groupBy = e.target.value; renderStats(); }
+});
+$("stats").addEventListener("click", (e) => {
+  const bin = e.target.closest("[data-bin-min]");
+  if (bin && state.focus) {
+    const min = bin.dataset.binMin;
+    const max = bin.dataset.binMax;
+    const cur = state.num[state.focus];
+    if (cur && String(userNum(cur.min).n) === String(Number(min)) && String(userNum(cur.max).n) === String(Number(max))) delete state.num[state.focus];
+    else state.num[state.focus] = { min, max };
+    renderSidebar();
+    apply();
+    return;
+  }
+  const br = e.target.closest("[data-break]");
+  if (br) toggleCat(br.dataset.break, br.dataset.val);
+});
+
+$("headScroll").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-sort]");
+  if (!b) return;
+  const col = b.dataset.sort;
+  if (state.sort.col === col) state.sort.dir *= -1;
+  else state.sort = { col, dir: 1 };
+  apply();
+});
+$("bodyScroll").addEventListener("scroll", () => { renderVisible(); alignHeader(); }, { passive: true });
+$("bodyScroll").addEventListener("click", (e) => {
+  const tr = e.target.closest("tr[data-row]");
+  if (tr) openRow(Number(tr.dataset.row));
+});
+$("backdrop").onclick = closeDrawer;
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") closeDrawer();
+  if (e.key === "/" && document.activeElement && document.activeElement.tagName !== "INPUT") {
+    e.preventDefault();
+    const q = $("q");
+    if (q) q.focus();
+  }
+});
+new ResizeObserver(() => { if (state.rows.length) { renderVisible(); alignHeader(); } }).observe($("bodyScroll"));
+
+["dragenter", "dragover"].forEach((ev) => document.addEventListener(ev, (e) => {
+  if (![...e.dataTransfer.types].includes("Files")) return;
+  e.preventDefault();
+  $("dropcard").classList.add("hot");
+  $("workspace").classList.add("hot");
+}));
+["dragleave", "drop"].forEach((ev) => document.addEventListener(ev, (e) => {
+  if (ev === "dragleave" && e.target !== document.documentElement) return;
+  $("dropcard").classList.remove("hot");
+  $("workspace").classList.remove("hot");
+}));
+document.addEventListener("drop", (e) => {
+  if (!e.dataTransfer.files.length) return;
+  e.preventDefault();
+  addFiles(e.dataTransfer.files);
+});
+</script>
+</body>
+</html>
